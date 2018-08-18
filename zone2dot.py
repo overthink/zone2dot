@@ -1,33 +1,10 @@
 import sys
 import json
 
-from collections import defaultdict
 from collections import namedtuple
 from operator import attrgetter
 
-def dot_esc(str):
-    """Escape str for use in DOT"""
-    return str.replace('"', '\\"')
-
-def dot_node(id_, label=None):
-    """Return a string representing a node in DOT."""
-    result = '"{}"'.format(dot_esc(id_))
-    if label:
-        result += ' [label="{}"]'.format(dot_esc(label))
-    return result
-
-def dot_edge(from_id, to_id, label=None):
-    """Return a string representing a directed edge in DOT."""
-    result = '"{}" -> "{}"'.format(dot_esc(from_id), dot_esc(to_id))
-    if label is not None:
-        result += ' label="{}"'.format(dot_esc(label))
-    return result
-
-class Alias(object):
-    """Reprsents the alias data in a Route53 Record."""
-    def __init__(self, name, type_):
-        self.name = name
-        self.type = type_
+Alias = namedtuple("Alias", ["name", "type_"])
 
 class Record(object):
     """Represents a Route53 "record set", which I just call a record."""
@@ -37,13 +14,11 @@ class Record(object):
         self.name = data.get("Name")
         self.type = data.get("Type")
         self.label = "{} ({})".format(self.name, self.type)
-        self.set_id = data.get("SetIdentifier", "")
-        self.id = ":".join([self.name, self.type, self.set_id])
 
         self.alias = None
         alias_data = data.get("AliasTarget")
         if alias_data:
-            self.alias = Alias( alias_data.get("DNSName"), self.type)
+            self.alias = Alias(alias_data.get("DNSName"), self.type)
 
         self.resources = []
         for resource in data.get("ResourceRecords", []):
@@ -60,6 +35,10 @@ class Record(object):
         if desc:
             self.routing_desc = ", ".join(desc)
 
+def dot_esc(str):
+    """Escape str for use in DOT"""
+    return str.replace('"', '\\"')
+
 class Edge(object):
     """A directed edge."""
     def __init__(self, src_id, dst_id, label=None):
@@ -68,43 +47,43 @@ class Edge(object):
         self.label = label
 
     def dot(self, prefix=""):
-        return prefix + dot_edge(self.src_id, self.dst_id, self.label)
+        result = prefix + '"{}" -> "{}"'.format(
+                dot_esc(self.src_id), 
+                dot_esc(self.dst_id))
+        if self.label is not None:
+            result += ' [label="{}"]'.format(dot_esc(self.label))
+        return result
 
 class Node(object):
-    def __init__(self, id_, label, routing_desc=None):
-        """routing_desc describes how traffic is routed to this node, e.g. the
-        weight or region or geo of this node. It ends up used as an edge label
-        for directed edges ending at this node."""
+    def __init__(self, id_, label):
         self.id = id_
         self.label = label
-        self.routing_desc = routing_desc
-        self.children = []
         self.edges = []
 
-    def add_edge(self, dst_node, label):
-        # TODO
-        pass
+    def add_edge(self, dst_id, label):
+        self.edges.append(Edge(self.id, dst_id, label))
 
     def dot(self, prefix=""):
-        result = []
-        result.append(prefix + dot_node(self.id, self.label))
+        node_dot = prefix + '"{}"'.format(dot_esc(self.id))
+        if self.label:
+            node_dot += ' [label="{}"]'.format(dot_esc(self.label))
+        result = [node_dot]
         # edges out from this node
-        for child in self.children:
-            result.append(prefix + dot_edge(self.id, child.id, child.routing_desc))
+        for edge in self.edges:
+            result.append(edge.dot(prefix))
         return "\n".join(result)
 
 class Graph(object):
     """More of a forest than a graph. Builds up a graph from the records given.
     Can output DOT."""
 
-    def _get_or_create_node(self, name, type_, routing_desc=None):
+    def _get_or_create_node(self, name, type_):
         """Get or create a node with the given data."""
         node_id = ":".join([name, type_])
         node = self.node_by_id.get(node_id)
         if node is not None:
-            node.routing_desc = routing_desc
             return node
-        node = Node(node_id, "{} ({})".format(name, type_), routing_desc)
+        node = Node(node_id, "{} ({})".format(name, type_))
         self.node_by_id[node_id] = node
         return node
 
@@ -114,11 +93,11 @@ class Graph(object):
             # nodes, make an edge between them, and store it on the src node
             src = self._get_or_create_node(rec.name, rec.type)
             if rec.alias:
-                dst = self._get_or_create_node(rec.alias.name, rec.type, rec.routing_desc)
-                src.children.append(dst)
+                dst = self._get_or_create_node(rec.alias.name, rec.type)
+                src.add_edge(dst.id, rec.routing_desc)
             else:
                 for res in rec.resources:
-                    src.children.append(Node(res, res))
+                    src.edges.append(Node(res, res))
 
     def __init__(self, records):
         """records is a list of ResourceRecordSets form the aws route53 api
