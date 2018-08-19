@@ -19,5 +19,6 @@ if you care) attached.
 ## TODO
 
 * tests
-* linter
+* lint
+* prettier output
 

@@ -52,6 +52,7 @@ class Edge(object):
                 dot_esc(self.dst_id))
         if self.label is not None:
             result += ' [label="{}"]'.format(dot_esc(self.label))
+        result += ";"
         return result
 
 class Node(object):
@@ -67,7 +68,7 @@ class Node(object):
         node_dot = prefix + '"{}"'.format(dot_esc(self.id))
         if self.label:
             node_dot += ' [label="{}"]'.format(dot_esc(self.label))
-        result = [node_dot]
+        result = [node_dot + ";"]
         # edges out from this node
         for edge in self.edges:
             result.append(edge.dot(prefix))
@@ -89,15 +90,17 @@ class Graph(object):
 
     def _build_graph(self):
         for rec in self.records:
+            if rec.type == "TXT": continue # skip TXT for now
             # Each record is an edge in the graph, so extract the src and dst
             # nodes, make an edge between them, and store it on the src node
             src = self._get_or_create_node(rec.name, rec.type)
-            if rec.alias:
+            if rec.alias is not None:
                 dst = self._get_or_create_node(rec.alias.name, rec.type)
                 src.add_edge(dst.id, rec.routing_desc)
             else:
                 for res in rec.resources:
-                    src.edges.append(Node(res, res))
+                    dst = self._get_or_create_node(res, rec.type)
+                    src.add_edge(dst.id, rec.routing_desc)
 
     def __init__(self, records):
         """records is a list of ResourceRecordSets form the aws route53 api
@@ -110,7 +113,8 @@ class Graph(object):
         """Return graph as a big string in DOT syntax."""
         result = []
         result.append("digraph {")
-        result.append("  node [shape=rectangle]")
+        result.append("  node [shape=rectangle];")
+        result.append("  rankdir = LR;")
         for node in sorted(self.node_by_id.values(), key=attrgetter('id')):
             result.append(node.dot(prefix="  "))
         result.append("}")
