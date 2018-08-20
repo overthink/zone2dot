@@ -1,0 +1,7 @@
+#!/bin/bash
+# Return the HostedZoneId for a domain name.
+set -euo pipefail
+domain_name="${1:?provide a domain name you host at route53}"
+aws route53 list-hosted-zones-by-name --dns-name "$domain_name" --max-items 1 \
+  | jq -r .HostedZones[0].Id \
+  | sed -e 's,/.*/,,'

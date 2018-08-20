@@ -1,5 +1,6 @@
 import sys
 import json
+import fileinput
 
 from collections import namedtuple
 from operator import attrgetter
@@ -120,18 +121,18 @@ class Graph(object):
         result.append("}")
         return "\n".join(result)
 
-def load_records(filename):
-    """Returns a list of Record objects parsed from filename."""
-    with open(filename) as f:
-        records = json.load(f).get("ResourceRecordSets")
+def load_records(file_obj):
+    """Returns a list of Record objects loaded from file_obj. Closing file_obj
+    is the caller's responsibility."""
+    records = json.load(file_obj).get("ResourceRecordSets")
     return [Record(r) for r in records]
 
 def main():
-    if len(sys.argv) < 2:
-        print "Usage: {}: <zonefile>".format(sys.argv[0])
-        sys.exit(1)
-
-    records = load_records(sys.argv[1])
+    file_obj = sys.stdin
+    if len(sys.argv) > 1:
+        file_obj = open(sys.argv[1], 'r')
+    with file_obj:
+        records = load_records(file_obj)
     g = Graph(records)
     print g.dot()
 
