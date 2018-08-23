@@ -1,11 +1,10 @@
-import sys
 import json
-import fileinput
-
+import sys
 from collections import namedtuple
 from operator import attrgetter
 
 Alias = namedtuple("Alias", ["name", "type_"])
+
 
 class Record(object):
     """Represents a Route53 "record set", which I just call a record."""
@@ -28,7 +27,7 @@ class Record(object):
         self.routing_desc = None
         weight = data.get("Weight")
         region = data.get("Region")
-        desc = [] # pretty sure it is invalid to have both weight and latency, but let's see
+        desc = []  # pretty sure it is invalid to have both weight and latency
         if weight is not None:
             desc.append("w:{}".format(weight))
         if region is not None:
@@ -36,9 +35,11 @@ class Record(object):
         if desc:
             self.routing_desc = ", ".join(desc)
 
+
 def dot_esc(str):
     """Escape str for use in DOT"""
     return str.replace('"', '\\"')
+
 
 class Edge(object):
     """A directed edge."""
@@ -49,12 +50,13 @@ class Edge(object):
 
     def dot(self, prefix=""):
         result = prefix + '"{}" -> "{}"'.format(
-                dot_esc(self.src_id), 
+                dot_esc(self.src_id),
                 dot_esc(self.dst_id))
         if self.label is not None:
             result += ' [label="{}"]'.format(dot_esc(self.label))
         result += ";"
         return result
+
 
 class Node(object):
     def __init__(self, id_, label):
@@ -75,6 +77,7 @@ class Node(object):
             result.append(edge.dot(prefix))
         return "\n".join(result)
 
+
 class Graph(object):
     """More of a forest than a graph. Builds up a graph from the records given.
     Can output DOT."""
@@ -91,7 +94,8 @@ class Graph(object):
 
     def _build_graph(self):
         for rec in self.records:
-            if rec.type == "TXT": continue # skip TXT for now
+            if rec.type == "TXT":
+                continue  # skip TXT for now
             # Each record is an edge in the graph, so extract the src and dst
             # nodes, make an edge between them, and store it on the src node
             src = self._get_or_create_node(rec.name, rec.type)
@@ -121,11 +125,13 @@ class Graph(object):
         result.append("}")
         return "\n".join(result)
 
+
 def load_records(file_obj):
     """Returns a list of Record objects loaded from file_obj. Closing file_obj
     is the caller's responsibility."""
     records = json.load(file_obj).get("ResourceRecordSets")
     return [Record(r) for r in records]
+
 
 def main():
     file_obj = sys.stdin
@@ -136,6 +142,6 @@ def main():
     g = Graph(records)
     print g.dot()
 
+
 if __name__ == "__main__":
     main()
-

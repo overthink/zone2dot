@@ -21,10 +21,13 @@ Works on the tiny subset of zones I've seen. If you have an interesting zone
 that doesn't work well, please submit an issue with the zone JSON (anonymized,
 if you care) attached.
  
+## Development
+
+* Run `make` to run the linter and make sure it's clean
+
 ## TODO
 
 * CNAMEs need thought
 * tests
-* lint
 * prettier output
 
